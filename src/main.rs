@@ -1,11 +1,16 @@
 use std::{net::TcpListener};
 
-use zero2prod::run;
+use sqlx::{MySqlConnection, Connection, MySqlPool};
+use zero2prod::{startup::run, configuration::{get_configuration}};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()>{
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let configuration = get_configuration().expect("Failed to read configuration");
+    let connection_string = configuration.database.connection_string();
+    let connection = MySqlPool::connect(&connection_string).await.expect("Failed to connec to Mysql");
+    let address = format!("127.0.0.1:{}",configuration.application_port);
+    let listener = TcpListener::bind(address)?;
     println!("{}",listener.local_addr().unwrap().port());
-    let server = run(listener).unwrap();
-    tokio::spawn(server).await?
+    run(listener,connection)?.await
+    // tokio::spawn(server).await?
 }
