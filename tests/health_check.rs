@@ -1,8 +1,20 @@
-use std::{net::TcpListener};
+use std::{net::TcpListener, io::{stdout, sink}};
 
+use once_cell::sync::Lazy;
+use secrecy::ExposeSecret;
 use sqlx::{MySqlPool, MySqlConnection, Connection, Executor};
 use uuid::Uuid;
-use zero2prod::configuration::{get_configuration};
+use zero2prod::{configuration::{get_configuration}, telemetry::{get_subscriber, init_subscriber}};
+
+static TRACING: Lazy<()> = Lazy::new(|| {
+     if std::env::var("TEST_LOG").is_ok() {
+        let subscriber = get_subscriber("test".into(), "debug".into(),stdout);
+        init_subscriber(subscriber);
+            } else {
+                let subscriber = get_subscriber("test".into(), "debug".into(),sink);
+                init_subscriber(subscriber);
+            };
+});
 
 #[tokio::test]
 async fn health_check_works() {
@@ -29,7 +41,7 @@ async fn subscribe_returns_a_200_for_valid_form_data() {
     let app = spawn_app().await;
     // try to connect to mysql
     let client = reqwest::Client::new();
-    let body = "name=adithya&email=jaldaadithya%40gmail.com";
+    let body = "name=&email=jaldaadithya%40gmail.com";
 
     let response = client.post(&format!("{}/subscriptions",&app.address))
     .header("Content-type", "application/x-www-form-urlencoded")
@@ -50,7 +62,7 @@ async fn subscribe_returns_a_400_when_data_is_missing() {
 // Arrange
 let app = spawn_app().await;
 let client = reqwest::Client::new(); let test_cases = vec![
-        ("name=le%20guin", "missing the email"),
+        ("name=", "missing the email"),
         ("email=ursula_le_guin%40gmail.com", "missing the name"),
         ("", "missing both name and email")
 ];
@@ -77,6 +89,9 @@ pub struct TestApp {
 
 // Launch our application in the background ~somehow~
 async fn spawn_app() -> TestApp { 
+
+    Lazy::force(&TRACING);
+    
     let listener = TcpListener::bind("127.0.0.1:0")
     .expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
@@ -95,7 +110,7 @@ async fn spawn_app() -> TestApp {
 }
 
 async fn configure_database(database: &zero2prod::configuration::DatabaseSettings) -> MySqlPool {
-    let mut connection = MySqlConnection::connect(&database.connection_string_without_db())
+    let mut connection = MySqlConnection::connect(&database.connection_string_without_db().expose_secret())
     .await
     .expect("Failed to connect to Mysql");
 
@@ -103,7 +118,7 @@ async fn configure_database(database: &zero2prod::configuration::DatabaseSetting
     .await
     .expect("Failed to create database");
 
-    let pool = MySqlPool::connect(&database.connection_string())
+    let pool = MySqlPool::connect(&database.connection_string().expose_secret())
     .await
     .expect("Fialed to connect to Mysql");
 

@@ -1,0 +1,13 @@
+{
+  "db": "MySQL",
+  "eac2abcc904bb291dec6f9dc8162f68d910c1699f0d610237c08c965f88eab30": {
+    "query": "\n    INSERT INTO subscriptions (email, name)\n    VALUES (?, ?)\n",
+    "describe": {
+      "columns": [],
+      "parameters": {
+        "Right": 2
+      },
+      "nullable": []
+    }
+  }
+}
